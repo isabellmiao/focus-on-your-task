@@ -643,7 +643,7 @@ tabToday.onclick = () => setTab('today'); tabUpcoming.onclick = () => setTab('up
 
 function updActive() {
   const tk = S.tasks.find(t => t.id === S.activeId);
-  document.getElementById('activeTaskDisp').textContent = tk ? tk.title : 'No task selected (click a task below)';
+  document.getElementById('activeTaskDisp').textContent = tk ? tk.title : 'No task selected';
 }
 
 function renderTasks() {
