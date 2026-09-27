@@ -210,19 +210,19 @@ footer {
 <!-- Passkey Modal -->
 <div class="modal-overlay" id="passkeyModal">
   <div class="modal-box">
-    <div class="modal-title">🔑 Enter Your Secret Key</div>
+    <div class="modal-title">🔑 Secret Sync Key</div>
     <div class="modal-desc">
-      Choose a personal secret word (e.g. <code>isabell-focus</code>). Enter this same word on your phone and computer to sync your private tasks.
+      Enter your private secret word on each device to sync your tasks.
     </div>
-    <input type="text" id="modalKeyInput" class="modal-input" placeholder="e.g. isabell-focus" autocomplete="off">
-    <button id="modalSaveBtn" class="modal-btn">Connect & Sync</button>
+    <input type="password" id="modalKeyInput" class="modal-input" placeholder="Enter secret key..." autocomplete="off">
+    <button id="modalSaveBtn" class="modal-btn">Save Key</button>
   </div>
 </div>
 
 <header>
   <div class="brand-group">
     <div class="brand">Focus On Your Task</div>
-    <span class="sync-indicator" id="syncStatus" title="Click to change your secret key">🔑 Key</span>
+    <span class="sync-indicator" id="syncStatus" title="Click to change secret key">● Synced</span>
   </div>
   <div class="swatches">
     <div class="swatch" style="background:#F0E1CF" data-c="#F0E1CF" data-t="light" title="#F0E1CF"></div>
@@ -302,6 +302,7 @@ footer {
 <audio id="lofiAudio" loop crossorigin="anonymous" src="https://stream.zeno.fm/f3wvbbqmdg8uv"></audio>
 
 <script>
+// --- Firebase Config ---
 const firebaseConfig = {
   apiKey: "AIzaSyBE91qjBp0COmEqb-QRg9VNw3QJXtk-N8I",
   authDomain: "focus-on-your-task.firebaseapp.com",
@@ -342,7 +343,10 @@ function connectPasskey(key) {
   if (!key) return;
   S.passkey = key.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
   localStorage.setItem('focus_user_passkey', S.passkey);
-  syncStatus.textContent = `🔑 ${S.passkey}`;
+  
+  // NEVER display the raw passkey on screen!
+  syncStatus.textContent = 'Syncing...';
+  syncStatus.classList.remove('synced');
 
   if (db) {
     if (unsubscribeSnapshot) unsubscribeSnapshot();
@@ -361,6 +365,8 @@ function connectPasskey(key) {
         renderDists();
         updActive();
         document.getElementById('dailyCount').textContent = S.daily;
+        
+        syncStatus.textContent = '● Synced';
         syncStatus.classList.add('synced');
       } else {
         save();
@@ -368,6 +374,7 @@ function connectPasskey(key) {
     }, (err) => {
       console.log('Firestore err:', err);
       syncStatus.textContent = 'Offline';
+      syncStatus.classList.remove('synced');
     });
   }
 }
@@ -424,6 +431,8 @@ function save() {
   else localStorage.removeItem('focus_act');
 
   if (cloudDocRef && S.passkey) {
+    syncStatus.textContent = 'Syncing...';
+    syncStatus.classList.remove('synced');
     cloudDocRef.set({
       tasks: S.tasks,
       dists: S.dists,
@@ -432,7 +441,10 @@ function save() {
       color: S.color,
       theme: S.theme,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true }).catch(e => console.log('Sync err:', e));
+    }, { merge: true }).then(() => {
+      syncStatus.textContent = '● Synced';
+      syncStatus.classList.add('synced');
+    }).catch(e => console.log('Sync err:', e));
   }
 }
 
