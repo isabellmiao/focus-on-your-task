@@ -43,7 +43,7 @@ header {
 .brand { font-size: 1.15rem; font-weight: 700; }
 .sync-indicator {
   font-size: 0.72rem; font-weight: 600; padding: 2px 7px; border-radius: 10px;
-  background: rgba(255,255,255,0.15); color: var(--text-color); opacity: 0.85;
+  background: rgba(255,255,255,0.15); color: var(--text-color); opacity: 0.85; cursor: pointer;
 }
 .sync-indicator.synced { color: #81c784; }
 .swatches { display: flex; gap: 8px; }
@@ -176,14 +176,53 @@ main { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap
   border-radius: 4px; padding: 3px 8px; font-size: 0.75rem; font-weight: 600; cursor: pointer; margin-right: 4px;
 }
 .empty { font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 10px 0; }
-footer { margin-top: 24px; font-size: 0.8rem; color: var(--text-muted); text-align: center; }
+footer {
+  margin-top: 24px; font-size: 0.8rem; color: var(--text-muted); text-align: center;
+  display: flex; flex-direction: column; gap: 6px; align-items: center;
+}
+.key-link { text-decoration: underline; cursor: pointer; color: inherit; font-size: 0.75rem; }
+
+/* Passkey Setup Modal */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px); z-index: 100; justify-content: center; align-items: center; padding: 16px;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: #ffffff; color: #1a1a1a; border-radius: 12px; padding: 24px;
+  max-width: 360px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.3); text-align: center;
+}
+.modal-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; }
+.modal-desc { font-size: 0.85rem; color: #666; margin-bottom: 16px; line-height: 1.4; }
+.modal-input {
+  width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px;
+  font-size: 0.95rem; margin-bottom: 14px; outline: none; font-family: inherit;
+}
+.modal-input:focus { border-color: #2e7d32; }
+.modal-btn {
+  width: 100%; background: #1a1a1a; color: #fff; border: none; padding: 10px;
+  border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+}
 </style>
 </head>
 <body>
+
+<!-- Passkey Modal -->
+<div class="modal-overlay" id="passkeyModal">
+  <div class="modal-box">
+    <div class="modal-title">🔑 Enter Your Secret Key</div>
+    <div class="modal-desc">
+      Choose a personal secret word (e.g. <code>isabell-focus</code>). Enter this same word on your phone and computer to sync your private tasks.
+    </div>
+    <input type="text" id="modalKeyInput" class="modal-input" placeholder="e.g. isabell-focus" autocomplete="off">
+    <button id="modalSaveBtn" class="modal-btn">Connect & Sync</button>
+  </div>
+</div>
+
 <header>
   <div class="brand-group">
     <div class="brand">Focus On Your Task</div>
-    <span class="sync-indicator" id="syncStatus">● Cloud Sync</span>
+    <span class="sync-indicator" id="syncStatus" title="Click to change your secret key">🔑 Key</span>
   </div>
   <div class="swatches">
     <div class="swatch" style="background:#F0E1CF" data-c="#F0E1CF" data-t="light" title="#F0E1CF"></div>
@@ -256,7 +295,10 @@ footer { margin-top: 24px; font-size: 0.8rem; color: var(--text-muted); text-ali
     <div class="empty" id="emptyDist" style="display:none;">No notes recorded.</div>
   </section>
 </main>
-<footer>Daily completed focus rounds: <strong id="dailyCount">0</strong></footer>
+<footer>
+  <span>Daily completed focus rounds: <strong id="dailyCount">0</strong></span>
+  <span class="key-link" id="changeKeyLink">Change Secret Sync Key</span>
+</footer>
 <audio id="lofiAudio" loop crossorigin="anonymous" src="https://stream.zeno.fm/f3wvbbqmdg8uv"></audio>
 
 <script>
@@ -272,14 +314,17 @@ const firebaseConfig = {
 
 let db = null;
 let cloudDocRef = null;
+let unsubscribeSnapshot = null;
 const syncStatus = document.getElementById('syncStatus');
+const passkeyModal = document.getElementById('passkeyModal');
+const modalKeyInput = document.getElementById('modalKeyInput');
+const modalSaveBtn = document.getElementById('modalSaveBtn');
 
 try {
   firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
-  cloudDocRef = db.collection('focus_app').doc('my_tasks');
 } catch (e) {
-  console.log('Firebase init fallback:', e);
+  console.log('Firebase init error:', e);
 }
 
 const S = {
@@ -289,24 +334,21 @@ const S = {
   tab: 'today', color: '#5C7554', theme: 'dark',
   tasks: [], dists: [],
   audio: { on: false, snd: 'rain', vol: 0.4 },
-  isOvertime: false
+  isOvertime: false,
+  passkey: ''
 };
 
-function init() {
-  const t = localStorage.getItem('focus_tasks_v4'); if(t) S.tasks = JSON.parse(t);
-  const d = localStorage.getItem('focus_dists_v4'); if(d) S.dists = JSON.parse(d);
-  const u = localStorage.getItem('focus_durs_v4'); if(u) S.durs = JSON.parse(u);
-  S.left = S.durs[S.mode];
-  const c = localStorage.getItem('focus_col'); const th = localStorage.getItem('focus_thm');
-  if(c) setColor(c, th || 'dark', false);
-  const cnt = localStorage.getItem('focus_cnt'); if(cnt) S.daily = parseInt(cnt, 10);
-  const a = localStorage.getItem('focus_act'); if(a) S.activeId = a;
-  
-  renderTasks(); renderDists(); updDisplay(); updActive();
-  document.getElementById('dailyCount').textContent = S.daily;
+function connectPasskey(key) {
+  if (!key) return;
+  S.passkey = key.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+  localStorage.setItem('focus_user_passkey', S.passkey);
+  syncStatus.textContent = `🔑 ${S.passkey}`;
 
-  if (cloudDocRef) {
-    cloudDocRef.onSnapshot((doc) => {
+  if (db) {
+    if (unsubscribeSnapshot) unsubscribeSnapshot();
+    cloudDocRef = db.collection('private_boards').doc(S.passkey);
+
+    unsubscribeSnapshot = cloudDocRef.onSnapshot((doc) => {
       if (doc.exists) {
         const data = doc.data();
         if (data.tasks) S.tasks = data.tasks;
@@ -319,16 +361,55 @@ function init() {
         renderDists();
         updActive();
         document.getElementById('dailyCount').textContent = S.daily;
-
-        syncStatus.textContent = '● Synced';
         syncStatus.classList.add('synced');
       } else {
         save();
       }
     }, (err) => {
-      console.log('Sync status:', err);
+      console.log('Firestore err:', err);
       syncStatus.textContent = 'Offline';
     });
+  }
+}
+
+function promptPasskey() {
+  modalKeyInput.value = S.passkey || '';
+  passkeyModal.classList.add('open');
+  modalKeyInput.focus();
+}
+
+modalSaveBtn.onclick = () => {
+  const val = modalKeyInput.value.trim();
+  if (val) {
+    passkeyModal.classList.remove('open');
+    connectPasskey(val);
+  }
+};
+modalKeyInput.onkeydown = (e) => {
+  if (e.key === 'Enter') modalSaveBtn.onclick();
+};
+
+syncStatus.onclick = promptPasskey;
+document.getElementById('changeKeyLink').onclick = promptPasskey;
+
+function init() {
+  const t = localStorage.getItem('focus_tasks_v4'); if(t) S.tasks = JSON.parse(t);
+  const d = localStorage.getItem('focus_dists_v4'); if(d) S.dists = JSON.parse(d);
+  const u = localStorage.getItem('focus_durs_v4'); if(u) S.durs = JSON.parse(u);
+  S.left = S.durs[S.mode];
+  const c = localStorage.getItem('focus_col'); const th = localStorage.getItem('focus_thm');
+  if(c) setColor(c, th || 'dark', false);
+  const cnt = localStorage.getItem('focus_cnt'); if(cnt) S.daily = parseInt(cnt, 10);
+  const a = localStorage.getItem('focus_act'); if(a) S.activeId = a;
+
+  renderTasks(); renderDists(); updDisplay(); updActive();
+  document.getElementById('dailyCount').textContent = S.daily;
+
+  const savedKey = localStorage.getItem('focus_user_passkey');
+  if (savedKey) {
+    connectPasskey(savedKey);
+  } else {
+    promptPasskey();
   }
 }
 
@@ -342,8 +423,7 @@ function save() {
   if(S.activeId) localStorage.setItem('focus_act', S.activeId);
   else localStorage.removeItem('focus_act');
 
-  if (cloudDocRef) {
-    syncStatus.textContent = 'Syncing...';
+  if (cloudDocRef && S.passkey) {
     cloudDocRef.set({
       tasks: S.tasks,
       dists: S.dists,
@@ -352,12 +432,7 @@ function save() {
       color: S.color,
       theme: S.theme,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true }).then(() => {
-      syncStatus.textContent = '● Synced';
-      syncStatus.classList.add('synced');
-    }).catch(err => {
-      console.log('Cloud sync error:', err);
-    });
+    }, { merge: true }).catch(e => console.log('Sync err:', e));
   }
 }
 
@@ -672,3 +747,4 @@ init();
 </script>
 </body>
 </html>
+
