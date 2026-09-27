@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Focus On Your Task</title>
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+:root {
+  --bg-color: #5C7554; --text-color: #ffffff; --text-muted: rgba(255,255,255,0.7);
+  --card-bg: rgba(255,255,255,0.15); --card-border: rgba(255,255,255,0.2);
+  --btn-main-bg: #ffffff; --btn-main-text: #5C7554;
+  --item-active-bg: #ffffff; --item-text: #1a1a1a;
+  --input-bg: rgba(255,255,255,0.15); --input-border: rgba(255,255,255,0.25);
+  --input-text: #fff; --input-ph: rgba(255,255,255,0.6);
+  --active-border: #fff;
+  --audio-tint: rgba(0, 0, 0, 0.25);
+}
+body.theme-light {
+  --text-color: #1a1a1a; --text-muted: rgba(0,0,0,0.5);
+  --card-bg: rgba(0,0,0,0.04); --card-border: rgba(0,0,0,0.1);
+  --btn-main-bg: #1a1a1a; --btn-main-text: #ffffff;
+  --item-active-bg: #ffffff; --item-text: #1a1a1a;
+  --input-bg: rgba(0,0,0,0.04); --input-border: rgba(0,0,0,0.12);
+  --input-text: #1a1a1a; --input-ph: rgba(0,0,0,0.4);
+  --active-border: #1a1a1a;
+  --audio-tint: rgba(0, 0, 0, 0.12);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background-color: var(--bg-color); color: var(--text-color);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+  padding: 24px 16px 60px; transition: background 0.3s ease, color 0.3s ease;
+}
+header {
+  width: 100%; max-width: 480px; display: flex; justify-content: space-between;
+  align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--card-border); margin-bottom: 20px;
+}
+.brand-group { display: flex; align-items: center; gap: 8px; }
+.brand { font-size: 1.15rem; font-weight: 700; }
+.sync-indicator {
+  font-size: 0.72rem; font-weight: 600; padding: 2px 7px; border-radius: 10px;
+  background: rgba(255,255,255,0.15); color: var(--text-color); opacity: 0.85;
+}
+.sync-indicator.synced { color: #81c784; }
+.swatches { display: flex; gap: 8px; }
+.swatch {
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(128,128,128,0.3);
+  cursor: pointer; transition: transform 0.15s;
+}
+.swatch:hover { transform: scale(1.15); }
+.swatch.active { outline: 2px solid var(--text-color); outline-offset: 2px; }
+main { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 16px; }
+.card {
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 12px; padding: 20px; backdrop-filter: blur(8px);
+}
+.timer-card { text-align: center; }
+.mode-tabs { display: flex; justify-content: center; gap: 8px; margin-bottom: 14px; }
+.mode-btn {
+  background: transparent; border: none; color: var(--text-color); font: inherit;
+  font-size: 0.9rem; font-weight: 600; padding: 6px 12px; border-radius: 6px; cursor: pointer; opacity: 0.7;
+}
+.mode-btn.active { background: rgba(0,0,0,0.12); opacity: 1; }
+
+.timer-wrap {
+  display: flex; justify-content: center; align-items: center; margin: 4px 0 16px;
+}
+.timer-display {
+  font-size: 5.5rem; font-weight: 700; letter-spacing: -2px; line-height: 1;
+  cursor: pointer; padding: 0 4px; border-radius: 6px; font-variant-numeric: tabular-nums;
+  outline: none; transition: opacity 0.15s;
+}
+.timer-display.overtime { color: #ff6b6b; }
+
+.timer-controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 14px; }
+.btn-main {
+  background: var(--btn-main-bg); color: var(--btn-main-text); border: none; font: inherit;
+  font-size: 1.15rem; font-weight: 700; padding: 10px 36px; border-radius: 8px; cursor: pointer;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+}
+.btn-sec {
+  background: rgba(255,255,255,0.1); border: 1px solid var(--card-border);
+  color: var(--text-color); font: inherit; font-size: 0.85rem; font-weight: 600;
+  padding: 8px 14px; border-radius: 8px; cursor: pointer;
+}
+
+.break-prompt {
+  display: none; background: rgba(0,0,0,0.15); border: 1px solid var(--card-border);
+  border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;
+}
+.break-prompt span { font-size: 0.88rem; font-weight: 600; display: block; margin-bottom: 8px; }
+.break-prompt-btns { display: flex; justify-content: center; gap: 8px; }
+.break-btn {
+  background: var(--btn-main-bg); color: var(--btn-main-text); border: none; font: inherit;
+  font-size: 0.82rem; font-weight: 700; padding: 6px 14px; border-radius: 6px; cursor: pointer;
+}
+
+.audio-bar {
+  display: flex; justify-content: center; align-items: center; gap: 8px;
+  padding-top: 14px; border-top: 1px solid var(--card-border);
+}
+.audio-select {
+  background: rgba(255,255,255,0.1); border: 1px solid var(--card-border);
+  color: var(--text-color); font: inherit; font-size: 0.8rem; padding: 5px 8px; border-radius: 6px; outline: none;
+}
+.audio-select option { background: #fff; color: #222; }
+.audio-btn {
+  background: rgba(255,255,255,0.12); border: 1px solid var(--card-border);
+  color: var(--text-color); font: inherit; font-size: 0.8rem; font-weight: 600;
+  padding: 5px 12px; border-radius: 6px; cursor: pointer; outline: none;
+}
+.audio-btn.playing { background: var(--audio-tint); border-color: transparent; outline: none; }
+.vol { width: 65px; accent-color: var(--text-color); cursor: pointer; }
+
+.active-task-bar {
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--card-border);
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.85;
+}
+.active-task-title { font-size: 1.3rem; font-weight: 700; text-transform: none; margin-top: 4px; }
+
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.nav-tabs { display: flex; gap: 4px; }
+.nav-tab {
+  background: none; border: none; color: var(--text-color); font: inherit;
+  font-size: 1rem; font-weight: 700; padding: 4px 6px; cursor: pointer; opacity: 0.5;
+  border-bottom: 2px solid transparent;
+}
+.nav-tab.active { opacity: 1; border-bottom-color: var(--text-color); }
+.sub-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.8rem; text-decoration: underline; }
+.text-input {
+  width: 100%; background: var(--input-bg); color: var(--input-text);
+  border: 1px solid var(--input-border); border-radius: 8px; padding: 10px 14px;
+  font-size: 0.95rem; font-family: inherit; outline: none; margin-bottom: 12px;
+}
+.text-input::placeholder { color: var(--input-ph); }
+.text-input:focus { background: #fff; color: #111; border-color: #fff; }
+
+.task-list, .distraction-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+
+.task-item {
+  background: transparent; color: var(--text-color); border-radius: 8px;
+  padding: 12px 14px; display: flex; align-items: center; gap: 10px; cursor: grab;
+  border: 1px solid var(--card-border); transition: all 0.15s;
+}
+
+.task-item.active {
+  background: var(--item-active-bg); color: var(--item-text);
+  border: 2px solid var(--active-border); box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+}
+.task-item.completed { opacity: 0.5; text-decoration: line-through; }
+.drag-handle { color: #888; cursor: grab; font-size: 0.95rem; }
+.chk { width: 18px; height: 18px; cursor: pointer; accent-color: var(--bg-color); }
+.task-text { flex: 1; font-weight: 600; font-size: 1.05rem; }
+.badge {
+  font-size: 0.7rem; font-weight: 700; background: #2e7d32; color: #fff;
+  padding: 3px 8px; border-radius: 4px; letter-spacing: 0.4px;
+}
+.tally { font-size: 0.85rem; font-weight: 600; color: #e74c3c; background: rgba(231,76,60,0.12); padding: 2px 6px; border-radius: 4px; }
+.act-btn {
+  background: none; border: none; color: #888; cursor: pointer; font-size: 1.15rem;
+  padding: 2px 5px; border-radius: 4px;
+}
+.act-btn:hover { color: #111; background: rgba(0,0,0,0.06); }
+.act-btn.del:hover { color: #e74c3c; }
+
+.dist-item {
+  background: transparent; border: 1px solid var(--card-border); color: var(--text-color);
+  border-radius: 6px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; font-size: 0.92rem;
+}
+.btn-conv {
+  background: rgba(0,0,0,0.1); border: 1px solid var(--card-border); color: var(--text-color);
+  border-radius: 4px; padding: 3px 8px; font-size: 0.75rem; font-weight: 600; cursor: pointer; margin-right: 4px;
+}
+.empty { font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 10px 0; }
+footer { margin-top: 24px; font-size: 0.8rem; color: var(--text-muted); text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand-group">
+    <div class="brand">Focus On Your Task</div>
+    <span class="sync-indicator" id="syncStatus">● Cloud Sync</span>
+  </div>
+  <div class="swatches">
+    <div class="swatch" style="background:#F0E1CF" data-c="#F0E1CF" data-t="light" title="#F0E1CF"></div>
+    <div class="swatch" style="background:#F0D3DE" data-c="#F0D3DE" data-t="light" title="#F0D3DE"></div>
+    <div class="swatch active" style="background:#5C7554" data-c="#5C7554" data-t="dark" title="#5C7554"></div>
+    <div class="swatch" style="background:#0D1D2A" data-c="#0D1D2A" data-t="dark" title="#0D1D2A"></div>
+    <div class="swatch" style="background:#8670E6" data-c="#8670E6" data-t="dark" title="#8670E6"></div>
+  </div>
+</header>
+<main>
+  <section class="card timer-card">
+    <div class="mode-tabs">
+      <button class="mode-btn active" data-m="work">Focus</button>
+      <button class="mode-btn" data-m="shortBreak">Short Break</button>
+      <button class="mode-btn" data-m="longBreak">Long Break</button>
+    </div>
+    <div class="timer-wrap">
+      <span class="timer-display" id="timeDisp" title="Click to edit minutes" contenteditable="false">25:00</span>
+    </div>
+
+    <div class="break-prompt" id="breakPrompt">
+      <span>Focus session finished! Wrap up and start break:</span>
+      <div class="break-prompt-btns">
+        <button class="break-btn" id="startShortBreakBtn">Short Break (5m)</button>
+        <button class="break-btn" id="startLongBreakBtn">Long Break (15m)</button>
+      </div>
+    </div>
+
+    <div class="timer-controls">
+      <button class="btn-main" id="startBtn">START</button>
+      <button class="btn-sec" id="resetBtn">Reset</button>
+      <button class="btn-sec" id="skipBtn">Skip</button>
+    </div>
+    <div class="audio-bar">
+      <select id="audioSel" class="audio-select">
+        <option value="rain">🌧️ Rain</option>
+        <option value="brown">🌊 Brown Noise</option>
+        <option value="white">💨 White Noise</option>
+        <option value="lofi">🎵 Lo-Fi Stream</option>
+      </select>
+      <button id="audioBtn" class="audio-btn">▶ Play</button>
+      <input type="range" id="vol" class="vol" min="0" max="1" step="0.05" value="0.4">
+    </div>
+    <div class="active-task-bar">
+      <span>FOCUSING ON</span>
+      <div class="active-task-title" id="activeTaskDisp">No task selected (click a task below)</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="section-header">
+      <div class="nav-tabs">
+        <button class="nav-tab active" id="tabToday">Today</button>
+        <button class="nav-tab" id="tabUpcoming">Upcoming</button>
+      </div>
+      <button class="sub-btn" id="clearDone">Clear completed</button>
+    </div>
+    <input type="text" id="taskInput" class="text-input" placeholder="Add a task" autocomplete="off">
+    <ul class="task-list" id="taskList"></ul>
+    <div class="empty" id="emptyTasks" style="display:none;">No tasks here.</div>
+  </section>
+
+  <section class="card">
+    <div class="section-header">
+      <span style="font-weight:700;font-size:1rem;">Scratchpad</span>
+      <button class="sub-btn" id="clearDist">Clear all</button>
+    </div>
+    <input type="text" id="distInput" class="text-input" placeholder="Add a note" autocomplete="off">
+    <ul class="distraction-list" id="distList"></ul>
+    <div class="empty" id="emptyDist" style="display:none;">No notes recorded.</div>
+  </section>
+</main>
+<footer>Daily completed focus rounds: <strong id="dailyCount">0</strong></footer>
+<audio id="lofiAudio" loop crossorigin="anonymous" src="https://stream.zeno.fm/f3wvbbqmdg8uv"></audio>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBE91qjBp0COmEqb-QRg9VNw3QJXtk-N8I",
+  authDomain: "focus-on-your-task.firebaseapp.com",
+  projectId: "focus-on-your-task",
+  storageBucket: "focus-on-your-task.firebasestorage.app",
+  messagingSenderId: "1023086093148",
+  appId: "1:1023086093148:web:6ffe74ab52faf3d2f65799",
+  measurementId: "G-0FB5WQWGLT"
+};
+
+let db = null;
+let cloudDocRef = null;
+const syncStatus = document.getElementById('syncStatus');
+
+try {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  cloudDocRef = db.collection('focus_app').doc('my_tasks');
+} catch (e) {
+  console.log('Firebase init fallback:', e);
+}
+
+const S = {
+  mode: 'work',
+  durs: { work: 1500, shortBreak: 300, longBreak: 900 },
+  left: 1500, running: false, timer: null, activeId: null, daily: 0,
+  tab: 'today', color: '#5C7554', theme: 'dark',
+  tasks: [], dists: [],
+  audio: { on: false, snd: 'rain', vol: 0.4 },
+  isOvertime: false
+};
+
+function init() {
+  const t = localStorage.getItem('focus_tasks_v4'); if(t) S.tasks = JSON.parse(t);
+  const d = localStorage.getItem('focus_dists_v4'); if(d) S.dists = JSON.parse(d);
+  const u = localStorage.getItem('focus_durs_v4'); if(u) S.durs = JSON.parse(u);
+  S.left = S.durs[S.mode];
+  const c = localStorage.getItem('focus_col'); const th = localStorage.getItem('focus_thm');
+  if(c) setColor(c, th || 'dark', false);
+  const cnt = localStorage.getItem('focus_cnt'); if(cnt) S.daily = parseInt(cnt, 10);
+  const a = localStorage.getItem('focus_act'); if(a) S.activeId = a;
+  
+  renderTasks(); renderDists(); updDisplay(); updActive();
+  document.getElementById('dailyCount').textContent = S.daily;
+
+  if (cloudDocRef) {
+    cloudDocRef.onSnapshot((doc) => {
+      if (doc.exists) {
+        const data = doc.data();
+        if (data.tasks) S.tasks = data.tasks;
+        if (data.dists) S.dists = data.dists;
+        if (data.durs) S.durs = data.durs;
+        if (typeof data.daily === 'number') S.daily = data.daily;
+        if (data.color && data.theme) setColor(data.color, data.theme, false);
+
+        renderTasks();
+        renderDists();
+        updActive();
+        document.getElementById('dailyCount').textContent = S.daily;
+
+        syncStatus.textContent = '● Synced';
+        syncStatus.classList.add('synced');
+      } else {
+        save();
+      }
+    }, (err) => {
+      console.log('Sync status:', err);
+      syncStatus.textContent = 'Offline';
+    });
+  }
+}
+
+function save() {
+  localStorage.setItem('focus_tasks_v4', JSON.stringify(S.tasks));
+  localStorage.setItem('focus_dists_v4', JSON.stringify(S.dists));
+  localStorage.setItem('focus_durs_v4', JSON.stringify(S.durs));
+  localStorage.setItem('focus_col', S.color);
+  localStorage.setItem('focus_thm', S.theme);
+  localStorage.setItem('focus_cnt', S.daily);
+  if(S.activeId) localStorage.setItem('focus_act', S.activeId);
+  else localStorage.removeItem('focus_act');
+
+  if (cloudDocRef) {
+    syncStatus.textContent = 'Syncing...';
+    cloudDocRef.set({
+      tasks: S.tasks,
+      dists: S.dists,
+      durs: S.durs,
+      daily: S.daily,
+      color: S.color,
+      theme: S.theme,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true }).then(() => {
+      syncStatus.textContent = '● Synced';
+      syncStatus.classList.add('synced');
+    }).catch(err => {
+      console.log('Cloud sync error:', err);
+    });
+  }
+}
+
+function setColor(c, th, shouldSave = true) {
+  S.color = c; S.theme = th;
+  document.documentElement.style.setProperty('--bg-color', c);
+  document.documentElement.style.setProperty('--btn-main-text', c);
+  if(th === 'light') document.body.classList.add('theme-light');
+  else document.body.classList.remove('theme-light');
+  document.querySelectorAll('.swatch').forEach(s => s.classList.toggle('active', s.dataset.c === c));
+  if (shouldSave) save();
+}
+document.querySelectorAll('.swatch').forEach(s => s.onclick = () => setColor(s.dataset.c, s.dataset.t, true));
+
+const timeDisp = document.getElementById('timeDisp');
+const startBtn = document.getElementById('startBtn');
+const breakPrompt = document.getElementById('breakPrompt');
+
+function fmt(sec) {
+  const isNeg = sec < 0;
+  const abs = Math.abs(sec);
+  const m = Math.floor(abs/60), s = abs % 60;
+  return `${isNeg ? '-' : ''}${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+}
+
+function updDisplay() {
+  timeDisp.textContent = fmt(S.left);
+  timeDisp.classList.toggle('overtime', S.left < 0);
+  const modeLabel = S.mode==='work' ? (S.left < 0 ? 'Overtime' : 'Focus') : 'Break';
+  document.title = `(${fmt(S.left)}) ${modeLabel} - Focus On Your Task`;
+}
+
+timeDisp.onclick = () => {
+  if(S.running) return;
+  timeDisp.contentEditable = "true";
+  timeDisp.focus();
+  document.execCommand('selectAll', false, null);
+};
+
+timeDisp.onkeydown = (e) => {
+  if(e.key === 'Enter') { e.preventDefault(); timeDisp.blur(); }
+  if(e.key === 'Escape') { updDisplay(); timeDisp.blur(); }
+};
+
+timeDisp.onblur = () => {
+  timeDisp.contentEditable = "false";
+  let txt = timeDisp.textContent.trim().replace(/[^0-9]/g, '');
+  let val = parseInt(txt, 10);
+  if(!isNaN(val) && val > 0 && val <= 180) {
+    S.durs[S.mode] = val * 60;
+    S.left = val * 60;
+    save();
+  }
+  updDisplay();
+};
+
+function setMode(m, autoStart = false) {
+  clearInterval(S.timer);
+  S.running = false;
+  S.isOvertime = false;
+  breakPrompt.style.display = 'none';
+  S.mode = m;
+  S.left = S.durs[m];
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.m === m));
+  updDisplay();
+  renderTasks();
+
+  if(autoStart) {
+    startTimer();
+  } else {
+    startBtn.textContent = 'START';
+  }
+}
+
+document.querySelectorAll('.mode-btn').forEach(b => b.onclick = () => setMode(b.dataset.m, false));
+
+function chime() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(587.33, ac.currentTime);
+    o.frequency.setValueAtTime(880, ac.currentTime + 0.15);
+    g.gain.setValueAtTime(0.25, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.7);
+    o.connect(g); g.connect(ac.destination);
+    o.start(); o.stop(ac.currentTime + 0.7);
+  } catch(e){}
+}
+
+function startTimer() {
+  S.running = true;
+  startBtn.textContent = 'PAUSE';
+  renderTasks();
+
+  S.timer = setInterval(() => {
+    S.left--;
+    updDisplay();
+
+    if(S.left === 0 && S.mode === 'work' && !S.isOvertime) {
+      S.isOvertime = true;
+      chime();
+      S.daily++;
+      document.getElementById('dailyCount').textContent = S.daily;
+      if(S.activeId) {
+        const tk = S.tasks.find(t => t.id === S.activeId);
+        if(tk) { tk.pomos = (tk.pomos||0) + 1; renderTasks(); }
+      }
+      save();
+      breakPrompt.style.display = 'block';
+    } else if(S.left === 0 && S.mode !== 'work') {
+      clearInterval(S.timer);
+      chime();
+      setMode('work', false);
+    }
+  }, 1000);
+}
+
+startBtn.onclick = () => {
+  if(S.running) {
+    clearInterval(S.timer);
+    S.running = false;
+    startBtn.textContent = 'START';
+    renderTasks();
+  } else {
+    startTimer();
+  }
+};
+
+document.getElementById('resetBtn').onclick = () => {
+  clearInterval(S.timer);
+  S.running = false;
+  S.isOvertime = false;
+  breakPrompt.style.display = 'none';
+  startBtn.textContent = 'START';
+  S.left = S.durs[S.mode];
+  updDisplay();
+  renderTasks();
+};
+
+document.getElementById('skipBtn').onclick = () => setMode(S.mode === 'work' ? 'shortBreak' : 'work', false);
+
+document.getElementById('startShortBreakBtn').onclick = () => setMode('shortBreak', true);
+document.getElementById('startLongBreakBtn').onclick = () => setMode('longBreak', true);
+
+let actx=null, src=null, gn=null;
+const lofi = document.getElementById('lofiAudio');
+function getAC() { if(!actx) { actx = new (window.AudioContext||window.webkitAudioContext)(); gn = actx.createGain(); gn.connect(actx.destination); } }
+
+function playNoise(t) {
+  getAC(); if(actx.state==='suspended') actx.resume();
+  const bs = actx.sampleRate * 2, buf = actx.createBuffer(1, bs, actx.sampleRate), d = buf.getChannelData(0);
+  let last = 0;
+  for(let i=0; i<bs; i++) {
+    const w = Math.random()*2 - 1;
+    if(t==='white') d[i] = w * 0.12;
+    else if(t==='brown') { last = (last + 0.02*w)/1.02; d[i] = last * 1.5; }
+    else if(t==='rain') { last = (last + 0.04*w)/1.04; d[i] = (last + (Math.random()>0.98?Math.random()*0.3:0))*0.35; }
+  }
+  src = actx.createBufferSource(); src.buffer = buf; src.loop = true;
+  src.connect(gn); gn.gain.setValueAtTime(S.audio.vol, actx.currentTime);
+  src.start();
+}
+
+function stopSound() {
+  S.audio.on = false; document.getElementById('audioBtn').textContent='▶ Play';
+  document.getElementById('audioBtn').classList.remove('playing');
+  if(src) { try{src.stop();}catch(e){} src.disconnect(); src=null; }
+  lofi.pause();
+}
+
+function startSound() {
+  stopSound(); S.audio.on = true;
+  document.getElementById('audioBtn').textContent='⏹ Stop';
+  document.getElementById('audioBtn').classList.add('playing');
+  if(S.audio.snd === 'lofi') { lofi.volume = S.audio.vol; lofi.play().catch(()=>{}); }
+  else playNoise(S.audio.snd);
+}
+
+document.getElementById('audioBtn').onclick = () => S.audio.on ? stopSound() : startSound();
+document.getElementById('audioSel').onchange = (e) => { S.audio.snd = e.target.value; if(S.audio.on) startSound(); };
+document.getElementById('vol').oninput = (e) => {
+  S.audio.vol = parseFloat(e.target.value); lofi.volume = S.audio.vol;
+  if(gn && actx) gn.gain.setValueAtTime(S.audio.vol, actx.currentTime);
+};
+
+const tabToday = document.getElementById('tabToday'), tabUpcoming = document.getElementById('tabUpcoming');
+const taskIn = document.getElementById('taskInput'), taskList = document.getElementById('taskList');
+
+function setTab(t) {
+  S.tab = t; tabToday.classList.toggle('active', t==='today'); tabUpcoming.classList.toggle('active', t==='upcoming');
+  taskIn.placeholder = t==='today' ? 'Add a task' : 'Add an upcoming task';
+  document.getElementById('clearDone').style.display = t==='today' ? 'inline' : 'none';
+  renderTasks();
+}
+tabToday.onclick = () => setTab('today'); tabUpcoming.onclick = () => setTab('upcoming');
+
+function updActive() {
+  const tk = S.tasks.find(t => t.id === S.activeId);
+  document.getElementById('activeTaskDisp').textContent = tk ? tk.title : 'No task selected (click a task below)';
+}
+
+function renderTasks() {
+  taskList.innerHTML = '';
+  const vis = S.tasks.filter(t => (t.tab||'today') === S.tab);
+  document.getElementById('emptyTasks').style.display = vis.length ? 'none' : 'block';
+
+  const isActivelyFocusing = S.running && S.mode === 'work';
+
+  vis.forEach(t => {
+    const li = document.createElement('li');
+    const isSelected = t.id === S.activeId;
+    li.className = `task-item ${isSelected ? 'active' : ''} ${t.done ? 'completed' : ''}`;
+    li.draggable = true; li.dataset.id = t.id;
+    const isTod = S.tab === 'today';
+    const isThisTaskFocusing = isSelected && isActivelyFocusing;
+
+    li.innerHTML = `
+      <span class="drag-handle">⋮⋮</span>
+      ${isTod ? `<input type="checkbox" class="chk" ${t.done?'checked':''}>` : ''}
+      <span class="task-text">${t.title}</span>
+      ${isThisTaskFocusing ? `<span class="badge">● FOCUSING</span>` : ''}
+      ${t.pomos ? `<span class="tally">🍅 ${t.pomos}</span>` : ''}
+      ${!isThisTaskFocusing ? `<button class="act-btn mov" title="${isTod?'Move to Upcoming':'Move to Today'}">${isTod?'→':'←'}</button><button class="act-btn del" title="Delete">×</button>` : ''}
+    `;
+
+    li.onclick = (e) => {
+      if(e.target.closest('.chk') || e.target.closest('.act-btn') || e.target.closest('.drag-handle')) return;
+      if(isTod) { S.activeId = t.id; renderTasks(); updActive(); save(); }
+    };
+    const chk = li.querySelector('.chk');
+    if(chk) chk.onchange = () => { t.done = chk.checked; renderTasks(); save(); };
+
+    const mov = li.querySelector('.mov');
+    if(mov) mov.onclick = (e) => {
+      e.stopPropagation(); t.tab = isTod ? 'upcoming' : 'today';
+      if(isTod && S.activeId === t.id) { S.activeId = null; updActive(); }
+      renderTasks(); save();
+    };
+
+    const del = li.querySelector('.del');
+    if(del) del.onclick = (e) => {
+      e.stopPropagation(); S.tasks = S.tasks.filter(x => x.id !== t.id);
+      if(S.activeId === t.id) { S.activeId = null; updActive(); }
+      renderTasks(); save();
+    };
+
+    li.ondragstart = (e) => { e.dataTransfer.setData('text/plain', t.id); li.style.opacity='0.4'; };
+    li.ondragend = () => { li.style.opacity='1'; };
+    li.ondragover = (e) => { e.preventDefault(); };
+    li.ondrop = (e) => {
+      e.preventDefault(); const srcId = e.dataTransfer.getData('text/plain');
+      if(srcId !== t.id) {
+        const fromIdx = S.tasks.findIndex(x => x.id === srcId), toIdx = S.tasks.findIndex(x => x.id === t.id);
+        const [moved] = S.tasks.splice(fromIdx, 1); S.tasks.splice(toIdx, 0, moved);
+        save(); renderTasks();
+      }
+    };
+    taskList.appendChild(li);
+  });
+}
+
+taskIn.onkeydown = (e) => {
+  if(e.key === 'Enter') {
+    const val = taskIn.value.trim(); if(!val) return;
+    const nt = { id: Date.now().toString(), title: val, done: false, pomos: 0, tab: S.tab };
+    S.tasks.push(nt);
+    if(S.tab === 'today' && !S.activeId) { S.activeId = nt.id; updActive(); }
+    taskIn.value = ''; renderTasks(); save();
+  }
+};
+
+document.getElementById('clearDone').onclick = () => {
+  S.tasks = S.tasks.filter(t => !(t.tab==='today' && t.done));
+  if(S.activeId && !S.tasks.some(t => t.id === S.activeId)) { S.activeId = null; updActive(); }
+  renderTasks(); save();
+};
+
+const distIn = document.getElementById('distInput'), distList = document.getElementById('distList');
+function renderDists() {
+  distList.innerHTML = '';
+  document.getElementById('emptyDist').style.display = S.dists.length ? 'none' : 'block';
+  S.dists.forEach(d => {
+    const li = document.createElement('li'); li.className = 'dist-item';
+    li.innerHTML = `
+      <span style="flex:1;">${d.text}</span>
+      <div>
+        <button class="btn-conv">+ Task</button>
+        <button class="act-btn del" style="font-size:1.05rem;">×</button>
+      </div>
+    `;
+    li.querySelector('.btn-conv').onclick = () => {
+      S.tasks.push({ id: Date.now().toString(), title: d.text, done: false, pomos: 0, tab: 'today' });
+      S.dists = S.dists.filter(x => x.id !== d.id);
+      renderTasks(); renderDists(); save();
+    };
+    li.querySelector('.del').onclick = () => {
+      S.dists = S.dists.filter(x => x.id !== d.id); renderDists(); save();
+    };
+    distList.appendChild(li);
+  });
+}
+distIn.onkeydown = (e) => {
+  if(e.key === 'Enter') {
+    const val = distIn.value.trim(); if(!val) return;
+    S.dists.push({ id: Date.now().toString(), text: val });
+    distIn.value = ''; renderDists(); save();
+  }
+};
+document.getElementById('clearDist').onclick = () => { S.dists = []; renderDists(); save(); };
+
+init();
+</script>
+</body>
+</html>
