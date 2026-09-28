@@ -47,6 +47,7 @@ header {
   background: #16a34a; border: 1.5px solid rgba(0,0,0,0.25);
   cursor: pointer; transition: background 0.2s, transform 0.2s, opacity 0.2s;
   flex-shrink: 0; margin-left: 2px;
+  overflow: hidden; text-indent: -9999px; font-size: 0; line-height: 0;
 }
 body.theme-light .sync-dot {
   border-color: rgba(0,0,0,0.35);
@@ -312,7 +313,7 @@ footer {
     </div>
     <div class="active-task-bar">
       <span>FOCUSING ON</span>
-      <div class="active-task-title" id="activeTaskDisp">No task selected (click a task below)</div>
+      <div class="active-task-title" id="activeTaskDisp">No task selected</div>
     </div>
   </section>
 
@@ -581,8 +582,8 @@ function save() {
   else localStorage.removeItem('focus_act');
 
   if (cloudDocRef && S.passkey) {
-    syncStatus.textContent = 'Syncing...';
-    syncStatus.classList.remove('synced');
+    syncStatus.className = 'sync-dot syncing';
+    syncStatus.title = 'Syncing... (Click to change key)';
     cloudDocRef.set({
       tasks: S.tasks,
       dists: S.dists,
@@ -593,8 +594,8 @@ function save() {
       lastDate: S.lastDate,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true }).then(() => {
-      syncStatus.textContent = '● Synced';
-      syncStatus.classList.add('synced');
+      syncStatus.className = 'sync-dot synced';
+      syncStatus.title = 'Synced (Click to change key)';
     }).catch(e => console.log('Sync err:', e));
   }
 }
@@ -837,7 +838,7 @@ tabToday.onclick = () => setTab('today'); tabUpcoming.onclick = () => setTab('up
 
 function updActive() {
   const tk = S.tasks.find(t => t.id === S.activeId);
-  document.getElementById('activeTaskDisp').textContent = tk ? tk.title : 'No task selected (click a task below)';
+  document.getElementById('activeTaskDisp').textContent = tk ? tk.title : 'No task selected';
   updDisplay();
 }
 
