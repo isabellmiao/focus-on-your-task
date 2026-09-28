@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Focus On Your Task</title>
+<link rel="icon" id="dynamicFavicon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍅</text></svg>">
 <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -41,11 +42,30 @@ header {
 }
 .brand-group { display: flex; align-items: center; gap: 8px; }
 .brand { font-size: 1.15rem; font-weight: 700; }
-.sync-indicator {
-  font-size: 0.72rem; font-weight: 600; padding: 2px 7px; border-radius: 10px;
-  background: rgba(255,255,255,0.15); color: var(--text-color); opacity: 0.85; cursor: pointer;
+.sync-dot {
+  width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+  background: #16a34a; border: 1.5px solid rgba(0,0,0,0.25);
+  cursor: pointer; transition: background 0.2s, transform 0.2s, opacity 0.2s;
+  flex-shrink: 0; margin-left: 2px;
 }
-.sync-indicator.synced { color: #81c784; }
+body.theme-light .sync-dot {
+  border-color: rgba(0,0,0,0.35);
+}
+.sync-dot.synced {
+  background: #16a34a;
+  box-shadow: 0 0 6px rgba(22, 163, 74, 0.5);
+}
+.sync-dot.syncing {
+  background: #f59e0b;
+  animation: dotPulse 0.9s infinite alternate;
+}
+.sync-dot.offline {
+  background: #9ca3af;
+}
+@keyframes dotPulse {
+  from { transform: scale(0.85); opacity: 0.6; }
+  to { transform: scale(1.2); opacity: 1; }
+}
 .swatches { display: flex; gap: 8px; }
 .swatch {
   width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(128,128,128,0.3);
@@ -151,21 +171,44 @@ main { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap
   background: var(--item-active-bg); color: var(--item-text);
   border: 2px solid var(--active-border); box-shadow: 0 4px 14px rgba(0,0,0,0.18);
 }
-.task-item.completed { opacity: 0.5; text-decoration: line-through; }
-.drag-handle { color: #888; cursor: grab; font-size: 0.95rem; }
+.task-item.completed { opacity: 0.65; }
+.task-item.completed .task-text { text-decoration: line-through; opacity: 0.8; }
+.drag-handle {
+  color: var(--text-color); opacity: 0.55; cursor: grab; font-size: 0.95rem;
+  transition: opacity 0.15s;
+}
+.drag-handle:hover { opacity: 1; }
 .chk { width: 18px; height: 18px; cursor: pointer; accent-color: var(--bg-color); }
 .task-text { flex: 1; font-weight: 600; font-size: 1.05rem; }
 .badge {
   font-size: 0.7rem; font-weight: 700; background: #2e7d32; color: #fff;
   padding: 3px 8px; border-radius: 4px; letter-spacing: 0.4px;
 }
-.tally { font-size: 0.85rem; font-weight: 600; color: #e74c3c; background: rgba(231,76,60,0.12); padding: 2px 6px; border-radius: 4px; }
+.tally { font-size: 0.85rem; font-weight: 600; color: #e74c3c; background: rgba(231,76,60,0.15); padding: 2px 6px; border-radius: 4px; }
 .act-btn {
-  background: none; border: none; color: #888; cursor: pointer; font-size: 1.15rem;
-  padding: 2px 5px; border-radius: 4px;
+  background: none; border: none; color: var(--text-color); opacity: 0.75;
+  cursor: pointer; font-size: 1.15rem; padding: 2px 6px; border-radius: 4px;
+  transition: all 0.15s;
 }
-.act-btn:hover { color: #111; background: rgba(0,0,0,0.06); }
-.act-btn.del:hover { color: #e74c3c; }
+.act-btn:hover {
+  opacity: 1; background: rgba(0,0,0,0.12);
+}
+body.theme-light .act-btn:hover {
+  background: rgba(0,0,0,0.08);
+}
+.task-item.active .act-btn {
+  color: #1a1a1a; opacity: 0.65;
+}
+.task-item.active .act-btn:hover {
+  opacity: 1; background: rgba(0,0,0,0.08);
+}
+.task-item.active .drag-handle {
+  color: #1a1a1a; opacity: 0.45;
+}
+.task-item.active .drag-handle:hover {
+  opacity: 0.85;
+}
+.act-btn.del:hover { color: #e74c3c; opacity: 1; }
 
 .dist-item {
   background: transparent; border: 1px solid var(--card-border); color: var(--text-color);
@@ -222,7 +265,7 @@ footer {
 <header>
   <div class="brand-group">
     <div class="brand">Focus On Your Task</div>
-    <span class="sync-indicator" id="syncStatus" title="Click to change secret key">● Synced</span>
+    <span class="sync-dot synced" id="syncStatus" title="Click to change secret sync key"></span>
   </div>
   <div class="swatches">
     <div class="swatch" style="background:#F0E1CF" data-c="#F0E1CF" data-t="light" title="#F0E1CF"></div>
@@ -244,10 +287,11 @@ footer {
     </div>
 
     <div class="break-prompt" id="breakPrompt">
-      <span>Focus session finished! Wrap up and start break:</span>
+      <span id="breakPromptText">Focus session finished! Wrap up and start break:</span>
       <div class="break-prompt-btns">
-        <button class="break-btn" id="startShortBreakBtn">Short Break (5m)</button>
-        <button class="break-btn" id="startLongBreakBtn">Long Break (15m)</button>
+        <button class="break-btn" id="extendFocusBtn">+10m Focus</button>
+        <button class="break-btn" id="startShortBreakBtn">Short Break</button>
+        <button class="break-btn" id="startLongBreakBtn">Long Break</button>
       </div>
     </div>
 
@@ -268,7 +312,7 @@ footer {
     </div>
     <div class="active-task-bar">
       <span>FOCUSING ON</span>
-      <div class="active-task-title" id="activeTaskDisp">No task selected</div>
+      <div class="active-task-title" id="activeTaskDisp">No task selected (click a task below)</div>
     </div>
   </section>
 
@@ -296,7 +340,7 @@ footer {
   </section>
 </main>
 <footer>
-  <span>Daily completed focus rounds: <strong id="dailyCount">0</strong></span><br/>
+  <span>Daily completed focus rounds: <strong id="dailyCount">0</strong></span>
   <span class="key-link" id="changeKeyLink">Change Secret Sync Key</span>
 </footer>
 <audio id="lofiAudio" loop crossorigin="anonymous" src="https://stream.zeno.fm/f3wvbbqmdg8uv"></audio>
@@ -328,6 +372,74 @@ try {
   console.log('Firebase init error:', e);
 }
 
+const faviconCanvas = document.createElement('canvas');
+faviconCanvas.width = 64;
+faviconCanvas.height = 64;
+const fCtx = faviconCanvas.getContext('2d');
+const faviconLink = document.getElementById('dynamicFavicon');
+
+function updateFavicon() {
+  if (!fCtx || !faviconLink) return;
+  fCtx.clearRect(0, 0, 64, 64);
+  const cx = 32, cy = 32, r = 24;
+  const total = S.durs[S.mode] || 1500;
+
+  // Background ring track
+  fCtx.beginPath();
+  fCtx.arc(cx, cy, r, 0, 2 * Math.PI);
+  fCtx.strokeStyle = 'rgba(128, 128, 128, 0.28)';
+  fCtx.lineWidth = 7;
+  fCtx.stroke();
+
+  let arcColor = S.theme === 'light' ? '#333333' : (S.color || '#5C7554');
+  let progress = 0;
+
+  if (S.mode !== 'work') {
+    arcColor = '#3b82f6'; // Clean blue for break
+  }
+
+  if (S.left < 0) {
+    arcColor = '#ef4444'; // Red for overtime
+    progress = 1;
+  } else {
+    progress = Math.max(0, Math.min(1, (total - S.left) / total));
+  }
+
+  // Draw progress arc
+  if (progress > 0) {
+    fCtx.beginPath();
+    const startAngle = -Math.PI / 2;
+    const endAngle = startAngle + (2 * Math.PI * progress);
+    fCtx.arc(cx, cy, r, startAngle, endAngle, false);
+    fCtx.strokeStyle = arcColor;
+    fCtx.lineWidth = 7;
+    fCtx.lineCap = 'round';
+    fCtx.stroke();
+  }
+
+  // Center indicator
+  if (!S.running) {
+    // Paused: pause bars
+    fCtx.fillStyle = arcColor;
+    fCtx.fillRect(cx - 6, cy - 7, 3.5, 14);
+    fCtx.fillRect(cx + 2.5, cy - 7, 3.5, 14);
+  } else if (S.left < 0) {
+    // Overtime: red alert dot
+    fCtx.beginPath();
+    fCtx.arc(cx, cy, 6, 0, 2 * Math.PI);
+    fCtx.fillStyle = '#ef4444';
+    fCtx.fill();
+  } else {
+    // Active running: solid dot
+    fCtx.beginPath();
+    fCtx.arc(cx, cy, 6, 0, 2 * Math.PI);
+    fCtx.fillStyle = arcColor;
+    fCtx.fill();
+  }
+
+  faviconLink.href = faviconCanvas.toDataURL('image/png');
+}
+
 const S = {
   mode: 'work',
   durs: { work: 1500, shortBreak: 300, longBreak: 900 },
@@ -336,8 +448,37 @@ const S = {
   tasks: [], dists: [],
   audio: { on: false, snd: 'rain', vol: 0.4 },
   isOvertime: false,
-  passkey: ''
+  passkey: '',
+  lastDate: ''
 };
+
+
+function checkDailyRollover() {
+  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+  if (!S.lastDate) {
+    S.lastDate = todayStr;
+    return false;
+  }
+  if (S.lastDate !== todayStr) {
+    // New day detected:
+    // 1. Clear completed tasks from Today
+    S.tasks = S.tasks.filter(t => !(t.tab === 'today' && t.done));
+    // 2. Move unfinished tasks from Today to Upcoming
+    S.tasks.forEach(t => {
+      if (t.tab === 'today' && !t.done) {
+        t.tab = 'upcoming';
+      }
+    });
+    // 3. Reset daily focus count
+    S.daily = 0;
+    // 4. Reset active task selection
+    S.activeId = null;
+    // 5. Update date
+    S.lastDate = todayStr;
+    return true;
+  }
+  return false;
+}
 
 function connectPasskey(key) {
   if (!key) return;
@@ -345,8 +486,8 @@ function connectPasskey(key) {
   localStorage.setItem('focus_user_passkey', S.passkey);
   
   // NEVER display the raw passkey on screen!
-  syncStatus.textContent = 'Syncing...';
-  syncStatus.classList.remove('synced');
+  syncStatus.className = 'sync-dot syncing';
+  syncStatus.title = 'Syncing... (Click to change key)';
 
   if (db) {
     if (unsubscribeSnapshot) unsubscribeSnapshot();
@@ -359,6 +500,10 @@ function connectPasskey(key) {
         if (data.dists) S.dists = data.dists;
         if (data.durs) S.durs = data.durs;
         if (typeof data.daily === 'number') S.daily = data.daily;
+        if (data.lastDate) S.lastDate = data.lastDate;
+        if (checkDailyRollover()) {
+          save();
+        }
         if (data.color && data.theme) setColor(data.color, data.theme, false);
 
         renderTasks();
@@ -366,15 +511,15 @@ function connectPasskey(key) {
         updActive();
         document.getElementById('dailyCount').textContent = S.daily;
         
-        syncStatus.textContent = '● Synced';
-        syncStatus.classList.add('synced');
+        syncStatus.className = 'sync-dot synced';
+        syncStatus.title = 'Synced (Click to change key)';
       } else {
         save();
       }
     }, (err) => {
       console.log('Firestore err:', err);
-      syncStatus.textContent = 'Offline';
-      syncStatus.classList.remove('synced');
+      syncStatus.className = 'sync-dot offline';
+      syncStatus.title = 'Offline (Click to change key)';
     });
   }
 }
@@ -408,6 +553,10 @@ function init() {
   if(c) setColor(c, th || 'dark', false);
   const cnt = localStorage.getItem('focus_cnt'); if(cnt) S.daily = parseInt(cnt, 10);
   const a = localStorage.getItem('focus_act'); if(a) S.activeId = a;
+  const ld = localStorage.getItem('focus_last_date'); if(ld) S.lastDate = ld;
+  if (checkDailyRollover()) {
+    save();
+  }
 
   renderTasks(); renderDists(); updDisplay(); updActive();
   document.getElementById('dailyCount').textContent = S.daily;
@@ -427,6 +576,7 @@ function save() {
   localStorage.setItem('focus_col', S.color);
   localStorage.setItem('focus_thm', S.theme);
   localStorage.setItem('focus_cnt', S.daily);
+  localStorage.setItem('focus_last_date', S.lastDate);
   if(S.activeId) localStorage.setItem('focus_act', S.activeId);
   else localStorage.removeItem('focus_act');
 
@@ -440,6 +590,7 @@ function save() {
       daily: S.daily,
       color: S.color,
       theme: S.theme,
+      lastDate: S.lastDate,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true }).then(() => {
       syncStatus.textContent = '● Synced';
@@ -455,6 +606,7 @@ function setColor(c, th, shouldSave = true) {
   if(th === 'light') document.body.classList.add('theme-light');
   else document.body.classList.remove('theme-light');
   document.querySelectorAll('.swatch').forEach(s => s.classList.toggle('active', s.dataset.c === c));
+  if (typeof updateFavicon === 'function') updateFavicon();
   if (shouldSave) save();
 }
 document.querySelectorAll('.swatch').forEach(s => s.onclick = () => setColor(s.dataset.c, s.dataset.t, true));
@@ -470,11 +622,33 @@ function fmt(sec) {
   return `${isNeg ? '-' : ''}${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
 }
 
+
+
 function updDisplay() {
   timeDisp.textContent = fmt(S.left);
   timeDisp.classList.toggle('overtime', S.left < 0);
-  const modeLabel = S.mode==='work' ? (S.left < 0 ? 'Overtime' : 'Focus') : 'Break';
-  document.title = `(${fmt(S.left)}) ${modeLabel} - Focus On Your Task`;
+
+  const timeStr = fmt(Math.abs(S.left));
+
+  let title = '';
+  if (S.left < 0) {
+    title = `⚠️ (+${timeStr}) Focus On Your Task`;
+  } else if (S.running) {
+    if (S.mode === 'work') {
+      title = `▶ (${timeStr}) Focus On Your Task`;
+    } else {
+      title = `☕ (${timeStr}) Focus On Your Task`;
+    }
+  } else {
+    // Paused or idle
+    if (S.left !== S.durs[S.mode]) {
+      title = `⏸ (${timeStr}) Focus On Your Task`;
+    } else {
+      title = `Focus On Your Task`;
+    }
+  }
+  document.title = title;
+  updateFavicon();
 }
 
 timeDisp.onclick = () => {
@@ -506,6 +680,8 @@ function setMode(m, autoStart = false) {
   S.running = false;
   S.isOvertime = false;
   breakPrompt.style.display = 'none';
+  if (extendFocusBtn) extendFocusBtn.style.display = 'inline-block';
+  if (breakPromptText) breakPromptText.textContent = 'Focus session finished! Wrap up and start break:';
   S.mode = m;
   S.left = S.durs[m];
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.m === m));
@@ -554,6 +730,8 @@ function startTimer() {
       }
       save();
       breakPrompt.style.display = 'block';
+      extendFocusBtn.style.display = 'inline-block';
+      breakPromptText.textContent = 'Focus session finished! Wrap up and start break:';
     } else if(S.left === 0 && S.mode !== 'work') {
       clearInterval(S.timer);
       chime();
@@ -568,8 +746,10 @@ startBtn.onclick = () => {
     S.running = false;
     startBtn.textContent = 'START';
     renderTasks();
+    updDisplay();
   } else {
     startTimer();
+    updDisplay();
   }
 };
 
@@ -578,6 +758,8 @@ document.getElementById('resetBtn').onclick = () => {
   S.running = false;
   S.isOvertime = false;
   breakPrompt.style.display = 'none';
+  if (extendFocusBtn) extendFocusBtn.style.display = 'inline-block';
+  if (breakPromptText) breakPromptText.textContent = 'Focus session finished! Wrap up and start break:';
   startBtn.textContent = 'START';
   S.left = S.durs[S.mode];
   updDisplay();
@@ -585,6 +767,18 @@ document.getElementById('resetBtn').onclick = () => {
 };
 
 document.getElementById('skipBtn').onclick = () => setMode(S.mode === 'work' ? 'shortBreak' : 'work', false);
+
+const extendFocusBtn = document.getElementById('extendFocusBtn');
+const breakPromptText = document.getElementById('breakPromptText');
+
+extendFocusBtn.onclick = () => {
+  S.left += 600; // Add 10 minutes (600 seconds)
+  S.isOvertime = false;
+  extendFocusBtn.style.display = 'none';
+  breakPromptText.textContent = 'Focus extended (+10m). Choose a break anytime:';
+  updDisplay();
+  if (!S.running) startTimer();
+};
 
 document.getElementById('startShortBreakBtn').onclick = () => setMode('shortBreak', true);
 document.getElementById('startLongBreakBtn').onclick = () => setMode('longBreak', true);
@@ -643,7 +837,8 @@ tabToday.onclick = () => setTab('today'); tabUpcoming.onclick = () => setTab('up
 
 function updActive() {
   const tk = S.tasks.find(t => t.id === S.activeId);
-  document.getElementById('activeTaskDisp').textContent = tk ? tk.title : 'No task selected';
+  document.getElementById('activeTaskDisp').textContent = tk ? tk.title : 'No task selected (click a task below)';
+  updDisplay();
 }
 
 function renderTasks() {
@@ -661,21 +856,32 @@ function renderTasks() {
     const isTod = S.tab === 'today';
     const isThisTaskFocusing = isSelected && isActivelyFocusing;
 
+    const showMoveBtn = !isThisTaskFocusing && (!t.done || !isTod);
     li.innerHTML = `
       <span class="drag-handle">⋮⋮</span>
       ${isTod ? `<input type="checkbox" class="chk" ${t.done?'checked':''}>` : ''}
       <span class="task-text">${t.title}</span>
       ${isThisTaskFocusing ? `<span class="badge">● FOCUSING</span>` : ''}
       ${t.pomos ? `<span class="tally">🍅 ${t.pomos}</span>` : ''}
-      ${!isThisTaskFocusing ? `<button class="act-btn mov" title="${isTod?'Move to Upcoming':'Move to Today'}">${isTod?'→':'←'}</button><button class="act-btn del" title="Delete">×</button>` : ''}
+      ${showMoveBtn ? `<button class="act-btn mov" title="${isTod?'Move to Upcoming':'Move to Today'}">${isTod?'→':'←'}</button>` : ''}
+      ${!isThisTaskFocusing ? `<button class="act-btn del" title="Delete">×</button>` : ''}
     `;
 
     li.onclick = (e) => {
       if(e.target.closest('.chk') || e.target.closest('.act-btn') || e.target.closest('.drag-handle')) return;
-      if(isTod) { S.activeId = t.id; renderTasks(); updActive(); save(); }
+      if(isTod && !t.done) { S.activeId = t.id; renderTasks(); updActive(); save(); }
     };
     const chk = li.querySelector('.chk');
-    if(chk) chk.onchange = () => { t.done = chk.checked; renderTasks(); save(); };
+    if(chk) chk.onchange = () => {
+      t.done = chk.checked;
+      if (t.done && S.activeId === t.id) {
+        S.activeId = null;
+        updActive();
+      }
+      renderTasks();
+      save();
+      updDisplay();
+    };
 
     const mov = li.querySelector('.mov');
     if(mov) mov.onclick = (e) => {
@@ -755,6 +961,7 @@ distIn.onkeydown = (e) => {
 };
 document.getElementById('clearDist').onclick = () => { S.dists = []; renderDists(); save(); };
 
+window.addEventListener('focus', () => { if (checkDailyRollover()) { renderTasks(); updActive(); save(); } });
 init();
 </script>
 </body>
